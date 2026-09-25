@@ -48,7 +48,7 @@ function extractHackerOnePage(handle) {
     return [];
   };
 
-  const buildResult = (team, records, notes = []) => {
+  const buildResult = (team, records, { source = null, notes = [] } = {}) => {
     const inScope = [];
     const outOfScope = [];
     const seen = new Set();
@@ -117,6 +117,15 @@ function extractHackerOnePage(handle) {
         url: programUrl,
         website: cleanText(team?.website),
         about: cleanText(team?.about),
+      },
+      capture: {
+        source,
+        platformUpdatedAt: {
+          policy: cleanText(team?.policy_setting?.last_policy_change_at),
+          scope: cleanText(team?.structured_scope_versions?.max_visible_updated_at),
+          rewards: cleanText(bountyTable.updated_at),
+          declarations: cleanText(declarativePolicy.updated_at),
+        },
       },
       metadata: {
         type: cleanText(team?.type),
@@ -286,7 +295,15 @@ function extractHackerOnePage(handle) {
       Object.prototype.hasOwnProperty.call(team.team, field),
     );
     if (hasProgramDetails) {
-      return Promise.resolve({ ok: true, data: buildResult(team.team, team.records) });
+      return Promise.resolve({
+        ok: true,
+        data: buildResult(team.team, team.records, {
+          source: {
+            method: "embedded-page-data",
+            description: "Structured program data already present in the loaded page",
+          },
+        }),
+      });
     }
   }
 
@@ -501,7 +518,13 @@ function extractHackerOnePage(handle) {
       throw new Error("The program scope is too large to export safely in one operation.");
     }
 
-    return buildResult(teamDetails, records);
+    return buildResult(teamDetails, records, {
+      source: {
+        method: "first-party-api",
+        description: "HackerOne GraphQL API",
+        endpoint: `${location.origin}/graphql`,
+      },
+    });
   };
 
   const queryDom = () => {
@@ -553,11 +576,15 @@ function extractHackerOnePage(handle) {
     const heading = document.querySelector("main h1, h1");
     const ogTitle = document.querySelector('meta[property="og:title"]')?.content || "";
     const name = cleanText(heading?.textContent) || cleanText(ogTitle).replace(/\s+-\s+Bug Bounty Program.*$/i, "");
-    return buildResult(
-      { name },
-      records,
-      ["Partial export: HackerOne's structured program metadata and policy could not be retrieved; only the visible scope table was available."],
-    );
+    return buildResult({ name }, records, {
+      source: {
+        method: "rendered-page",
+        description: "Scope table rendered on the program page",
+        endpoint: location.href,
+        complete: false,
+      },
+      notes: ["Partial export: HackerOne's structured program metadata and policy could not be retrieved; only the visible scope table was available."],
+    });
   };
 
   return queryApi()

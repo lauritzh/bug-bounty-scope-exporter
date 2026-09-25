@@ -1,8 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Bug Bounty Scope Exporter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Copy or save bug bounty program policies, metadata, and scope as Markdown or JSON.",
+  "author": {
+    "name": "Lauritz Holtmann",
+    "email": "security@lauritz-holtmann.de"
+  },
+  "homepage_url": "https://security.lauritz-holtmann.de",
   "permissions": [
     "clipboardWrite",
     "downloads",

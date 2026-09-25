@@ -1,10 +1,13 @@
 import { exportScope } from "./lib/exporters.js";
+import { attachCapture, buildCapture } from "./lib/provenance.js";
 import { getAdapter } from "./platforms/registry.js";
 
 const elements = {
   platform: document.querySelector("#platform"),
   program: document.querySelector("#program"),
+  freshness: document.querySelector("#freshness"),
   preview: document.querySelector("#preview"),
+  snapshot: document.querySelector("#snapshot"),
   status: document.querySelector("#status"),
   copy: document.querySelector("#copy"),
   save: document.querySelector("#save"),
@@ -15,11 +18,31 @@ const state = {
   adapter: null,
   scope: null,
   format: "markdown",
+  snapshot: true,
 };
 
 function setStatus(message, isError = false) {
   elements.status.textContent = message;
   elements.status.classList.toggle("error", isError);
+}
+
+function shortDate(value) {
+  const parsed = value ? new Date(value) : null;
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : "";
+}
+
+function setFreshness(capture) {
+  const parts = [];
+  if (capture?.fingerprint?.coverage?.complete === false) parts.push("partial snapshot");
+  const platformChange = shortDate(capture?.platformUpdatedAt?.latest);
+  if (platformChange) parts.push(`platform last changed ${platformChange}`);
+  if (capture?.fingerprint?.overall) {
+    parts.push(`fingerprint ${capture.fingerprint.overall.slice(0, 12)}`);
+  }
+  elements.freshness.textContent = parts.join(" · ");
+  elements.freshness.title = capture?.fingerprint?.overall
+    ? `Content fingerprint (${capture.fingerprint.algorithm}): ${capture.fingerprint.overall}`
+    : "";
 }
 
 function setActionsEnabled(enabled) {
@@ -29,7 +52,10 @@ function setActionsEnabled(enabled) {
 
 function currentText() {
   if (!state.scope || !state.adapter) return "";
-  return exportScope(state.scope, state.format, { platformLabel: state.adapter.label });
+  return exportScope(state.scope, state.format, {
+    platformLabel: state.adapter.label,
+    snapshot: state.snapshot,
+  });
 }
 
 function updatePreview() {
@@ -43,6 +69,11 @@ function setFormat(format) {
     button.setAttribute("aria-selected", String(selected));
     button.tabIndex = selected ? 0 : -1;
   }
+  // JSON carries the capture block as data, so there is no section to drop.
+  elements.snapshot.disabled = format === "json";
+  elements.snapshot.title = format === "json"
+    ? "JSON exports always include the capture block."
+    : "Include the Snapshot section with retrieval details and content fingerprints.";
   updatePreview();
 }
 
@@ -108,9 +139,12 @@ async function initialize() {
   elements.platform.textContent = adapter.label;
   setStatus("Extracting program scope…");
 
-  const scope = await adapter.extract({ tabId: tab.id, url: tab.url });
+  const extracted = await adapter.extract({ tabId: tab.id, url: tab.url });
+  const capture = await buildCapture(extracted, { sourceUrl: tab.url });
+  const scope = attachCapture(extracted, capture);
   state.scope = scope;
   elements.program.textContent = scope.program.name || scope.program.handle;
+  setFreshness(capture);
   updatePreview();
   setActionsEnabled(true);
 
@@ -121,13 +155,20 @@ async function initialize() {
 for (const button of elements.formatButtons) {
   button.addEventListener("click", () => setFormat(button.dataset.format));
 }
+elements.snapshot.addEventListener("change", () => {
+  state.snapshot = elements.snapshot.checked;
+  updatePreview();
+});
 elements.copy.addEventListener("click", copyCurrentExport);
 elements.save.addEventListener("click", saveCurrentExport);
+
+setFormat(state.format);
 
 initialize().catch((error) => {
   elements.preview.value = "";
   elements.preview.placeholder = "Scope could not be loaded.";
   elements.program.textContent = "";
+  elements.freshness.textContent = "";
   setActionsEnabled(false);
   setStatus(error instanceof Error ? error.message : "Could not load the program scope.", true);
 });

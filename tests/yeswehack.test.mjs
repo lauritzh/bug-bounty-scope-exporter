@@ -98,6 +98,12 @@ assert.deepEqual(normalized.attachments[0], {
   fileSize: 123,
   contentType: "application/pdf",
 });
+assert.deepEqual(normalized.capture.source, {
+  method: "first-party-api",
+  description: "YesWeHack public program API",
+  endpoint: "https://api.yeswehack.com/programs/example-program",
+});
+assert.equal(normalized.capture.platformUpdatedAt.program, fixture.last_update_at);
 assert.equal(JSON.stringify(normalized).includes("must-not-export"), false);
 
 pageProgram = { ...fixture, slug: "private-program", public: false };
@@ -117,6 +123,11 @@ const exporterUrl = `data:text/javascript;base64,${Buffer.from(exporterSource).t
 const { toJSON, toMarkdown } = await import(exporterUrl);
 assert.equal(JSON.stringify(JSON.parse(toJSON(normalized))), JSON.stringify(normalized));
 const markdown = toMarkdown(normalized, { platformLabel: "YesWeHack" });
+assert.match(markdown, /\| Retrieved via \| YesWeHack public program API \(first-party-api\) \|/);
+assert.match(markdown, /\| Program updated \| 2026-09-22T/);
+const withoutSnapshot = toMarkdown(normalized, { platformLabel: "YesWeHack", snapshot: false });
+assert.equal(withoutSnapshot.includes("## Snapshot"), false);
+assert.match(withoutSnapshot, /## In Scope/);
 assert.match(markdown, /### Account Access/);
 assert.match(markdown, /### Qualifying Vulnerabilities/);
 assert.match(markdown, /\| `https:\/\/example\.com` \| Web application \| LOW \| Yes \|/);

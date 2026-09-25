@@ -25,7 +25,7 @@ h1 {
 }
 
 .program {
-  min-height: 44px;
+  min-height: 58px;
   margin-bottom: 12px;
 }
 
@@ -40,10 +40,44 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.freshness {
+  margin-top: 3px;
+  font-size: 11px;
+  color: GrayText;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: GrayText;
+  cursor: pointer;
+}
+
+.toggle:has(input:disabled) {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.toggle input {
+  margin: 0;
+  cursor: inherit;
+}
+
 .format-switcher {
   display: flex;
   width: max-content;
-  margin-bottom: 8px;
   border: 1px solid ButtonBorder;
   border-radius: 6px;
   overflow: hidden;

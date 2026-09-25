@@ -126,7 +126,7 @@ function extractIntigritiPage(companyHandle, programHandle, researcherRoute) {
     };
   };
 
-  const buildResult = (data) => {
+  const buildResult = (data, source = null) => {
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       throw new Error("Intigriti returned an unexpected program response.");
     }
@@ -231,6 +231,16 @@ function extractIntigritiPage(companyHandle, programHandle, researcherRoute) {
     const routePrefix = researcherRoute ? "/researcher/programs" : "/programs";
     const canonicalUrl = `https://app.intigriti.com${routePrefix}/${encodeURIComponent(companyHandle)}/${encodeURIComponent(programHandle)}/detail`;
 
+    const platformUpdatedAt = {
+      assets: timestamp(assetsVersion?.createdAt),
+      inScope: inScopeSection.updatedAt,
+      outOfScope: outOfScopeSection.updatedAt,
+      faq: faqSection.updatedAt,
+      severityAssessment: severitySection.updatedAt,
+      rulesOfEngagement: rulesSection.updatedAt,
+      rewards: timestamp(bountyVersion?.createdAt),
+    };
+
     return {
       platform: "intigriti",
       program: {
@@ -239,6 +249,10 @@ function extractIntigritiPage(companyHandle, programHandle, researcherRoute) {
         url: canonicalUrl,
         website: "",
         about: cleanText(data.description),
+      },
+      capture: {
+        source,
+        platformUpdatedAt,
       },
       metadata: {
         companyName: cleanText(data.companyName),
@@ -258,15 +272,7 @@ function extractIntigritiPage(companyHandle, programHandle, researcherRoute) {
         acceptedSubmissionCount: numberOrNull(data.acceptedSubmissionCount),
         averagePayout: payoutValue(data.averagePayout),
         totalPayout: payoutValue(data.totalPayout),
-        updatedAt: {
-          assets: timestamp(assetsVersion?.createdAt),
-          inScope: inScopeSection.updatedAt,
-          outOfScope: outOfScopeSection.updatedAt,
-          faq: faqSection.updatedAt,
-          severityAssessment: severitySection.updatedAt,
-          rulesOfEngagement: rulesSection.updatedAt,
-          rewards: timestamp(bountyVersion?.createdAt),
-        },
+        updatedAt: { ...platformUpdatedAt },
       },
       guidelines: {
         policy: cleanText(rules.description),
@@ -332,7 +338,11 @@ function extractIntigritiPage(companyHandle, programHandle, researcherRoute) {
     if (!response.ok) {
       throw new Error(`Intigriti returned HTTP ${response.status} while loading this program.`);
     }
-    return buildResult(await response.json());
+    return buildResult(await response.json(), {
+      method: "first-party-api",
+      description: researcherRoute ? "Intigriti researcher program API" : "Intigriti public program API",
+      endpoint: `https://app.intigriti.com${endpoint}`,
+    });
   }).then((data) => ({ ok: true, data })).catch((error) => ({
     ok: false,
     error: error instanceof Error ? error.message : "Could not extract this Intigriti program's scope.",

@@ -52,7 +52,7 @@ function extractYesWeHackPage(programSlug) {
     };
   };
 
-  const buildResult = (data) => {
+  const buildResult = (data, source = null) => {
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       throw new Error("YesWeHack returned an unexpected program response.");
     }
@@ -128,6 +128,12 @@ function extractYesWeHackPage(programSlug) {
         url: `https://yeswehack.com/programs/${encodeURIComponent(programSlug)}`,
         website: "",
         about: cleanText(data.business_unit?.description),
+      },
+      capture: {
+        source,
+        platformUpdatedAt: {
+          program: cleanText(data.last_update_at),
+        },
       },
       metadata: {
         type: cleanText(data.type),
@@ -347,7 +353,10 @@ function extractYesWeHackPage(programSlug) {
   }
   if (pageProgram) {
     try {
-      return Promise.resolve({ ok: true, data: buildResult(pageProgram) });
+      return Promise.resolve({ ok: true, data: buildResult(pageProgram, {
+          method: "embedded-page-data",
+          description: "Program state already loaded by the page",
+        }) });
     } catch {
       // Fall back to the public endpoint if embedded state changes shape.
     }
@@ -368,13 +377,22 @@ function extractYesWeHackPage(programSlug) {
       if (currentPageProgram?.public === false) {
         throw new Error("YesWeHack support is work in progress and currently limited to public programs.");
       }
-      if (currentPageProgram) return buildResult(currentPageProgram);
+      if (currentPageProgram) {
+        return buildResult(currentPageProgram, {
+          method: "embedded-page-data",
+          description: "Program state already loaded by the page",
+        });
+      }
       throw new Error("YesWeHack could not access this program. The work-in-progress adapter currently supports public programs only.");
     }
     if (!response.ok) {
       throw new Error(`YesWeHack returned HTTP ${response.status} while loading this program.`);
     }
-    return buildResult(await response.json());
+    return buildResult(await response.json(), {
+      method: "first-party-api",
+      description: "YesWeHack public program API",
+      endpoint,
+    });
   }).then((data) => ({ ok: true, data })).catch((error) => ({
     ok: false,
     error: error instanceof Error ? error.message : "Could not extract this YesWeHack program's scope.",

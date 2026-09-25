@@ -113,6 +113,14 @@ assert.equal(normalized.inScope[1].bountyTier, "");
 assert.equal(normalized.inScope[1].bountyTierId, 998);
 assert.equal(normalized.inScope[1].eligibleForBounty, null);
 assert.equal(normalized.guidelines.policy, "Follow the rules.");
+assert.deepEqual(normalized.capture.source, {
+  method: "first-party-api",
+  description: "Intigriti researcher program API",
+  endpoint: "https://app.intigriti.com/api/core/researcher/programs/qualified/qualifiedbugbounty",
+});
+assert.equal(normalized.capture.platformUpdatedAt.assets, "2023-11-14T22:13:20.000Z");
+assert.equal(normalized.capture.platformUpdatedAt.rulesOfEngagement, "2023-11-14T22:13:22.000Z");
+assert.deepEqual(normalized.capture.platformUpdatedAt, normalized.metadata.updatedAt);
 
 responseFactory = () => ({
   status: 200,
@@ -126,6 +134,11 @@ assert.deepEqual(executeOptions.args, ["intel", "intelvulnerabilitydisclosurepro
 assert.equal(fetchCall.url, "/api/core/public/programs/intel/intelvulnerabilitydisclosureprogram");
 assert.equal(fetchCall.init.credentials, "omit");
 assert.equal(publicNormalized.program.url, publicUrl);
+assert.equal(publicNormalized.capture.source.description, "Intigriti public program API");
+assert.equal(
+  publicNormalized.capture.source.endpoint,
+  "https://app.intigriti.com/api/core/public/programs/intel/intelvulnerabilitydisclosureprogram",
+);
 
 responseFactory = () => ({ status: 403, ok: false });
 await assert.rejects(

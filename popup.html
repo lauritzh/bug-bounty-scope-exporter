@@ -13,15 +13,23 @@
       <section class="program" aria-live="polite">
         <div id="platform">Detecting platform…</div>
         <div id="program" class="program-name"></div>
+        <div id="freshness" class="freshness"></div>
       </section>
 
-      <div class="format-switcher" role="tablist" aria-label="Export format">
-        <button id="markdown-tab" type="button" role="tab" data-format="markdown" aria-selected="true">
-          Markdown
-        </button>
-        <button id="json-tab" type="button" role="tab" data-format="json" aria-selected="false">
-          JSON
-        </button>
+      <div class="controls">
+        <div class="format-switcher" role="tablist" aria-label="Export format">
+          <button id="markdown-tab" type="button" role="tab" data-format="markdown" aria-selected="true">
+            Markdown
+          </button>
+          <button id="json-tab" type="button" role="tab" data-format="json" aria-selected="false">
+            JSON
+          </button>
+        </div>
+
+        <label class="toggle" for="snapshot">
+          <input id="snapshot" type="checkbox" checked>
+          Snapshot section
+        </label>
       </div>
 
       <label class="sr-only" for="preview">Scope preview</label>

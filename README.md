@@ -5,9 +5,11 @@ This Chromium extension extracts the scope of a supported bug bounty program and
 ## Features
 
 * Mark supported program pages with a `!` badge on the extension's toolbar icon.
+* Record snapshot provenance with every export: when the scope was retrieved, the exact page URL it was retrieved from, how it was retrieved, and the update timestamps the platform itself reports.
+* Detect scope and policy drift with a content fingerprint that changes only when policy-relevant content changes.
 * Export program metadata, policy and guideline text, scope declarations and exclusions, reward tables, and non-sensitive attachment metadata.
 * Extract in-scope and out-of-scope assets, including asset type, group, bounty tier and eligibility, maximum severity, required skills, source, and asset-specific instructions when the platform provides them.
-* Preview, copy, or save the result as Markdown or JSON.
+* Preview, copy, or save the result as Markdown or JSON, with the Snapshot section switchable off for a leaner document.
 * Keep platform-specific behavior in small adapters so more bug bounty platforms can be added without changing the popup or exporters.
 
 ## Installation
@@ -28,10 +30,44 @@ Steps to install manually:
 
 1. Visit a supported bug bounty program page.
 2. Open the extension. Scope extraction starts automatically.
-3. Choose **Markdown** or **JSON**.
+3. Choose **Markdown** or **JSON**, and whether the Markdown export includes the **Snapshot section**.
 4. Select **Copy** to place the preview on the clipboard or **Save** to download it.
 
 The extension never saves extracted scope automatically.
+
+## Snapshot Freshness and Change Detection
+
+A saved scope is a point-in-time copy of a document the program owner can edit at any time. Every export therefore carries a `Snapshot` section in Markdown and a `capture` object in JSON:
+
+* `retrievedAt` — when the export was taken, in UTC.
+* `retrievedFrom` — the exact program page URL the export was taken from, with credentials and fragment removed.
+* `programUrl` — the canonical program URL, which may differ from the page that was open.
+* `source` — how the data was obtained: structured data embedded in the page, a first-party API including the endpoint that was called, or the rendered page as a partial fallback.
+* `platformUpdatedAt` — the change timestamps the platform publishes for policy, scope, assets, rewards, and declarations, plus the most recent of them as `latest`.
+* `fingerprint` — a SHA-256 content fingerprint as one overall value and one value per section, with in-scope and out-of-scope asset counts and a `coverage` flag describing how complete the capture was.
+
+Re-export a program and compare the fingerprints against an earlier snapshot to see whether anything relevant changed, and which section changed. The fingerprint has four sections:
+
+* `assets` — every in-scope and out-of-scope entry with its type, group, bounty tier, bounty eligibility, maximum severity, required skills, source, and instructions.
+* `policy` — the program description, the policy, scope, FAQ, severity-assessment and rules-of-engagement text, the testing requirements and safe-harbor declarations, and the policy attachments, because a program can rewrite its rules by replacing the file its policy points at.
+* `rewards` — reward guidance, reward tables, and bounty tiers.
+* `program` — the program state that governs whether and how testing is allowed, such as submission state, confidentiality, and researcher requirements.
+
+Retrieval can be partial: a platform API may be unreachable and only the rendered page readable, or a program may expose less to an unauthenticated visitor. A section that was not captured gets no digest at all, is shown as `Not captured`, and the export says so. This matters because hashing an uncaptured section would give every degraded export the same value, so two partial snapshots of a program whose policy changed in between would compare as unchanged — the exact false negative the fingerprint exists to prevent. An export only claims that unchanged content means unchanged policy when the capture was complete.
+
+The fingerprint is deliberately not a hash of the page or of the raw API response. Those carry request identifiers, counters, rendering state, and session-specific values that differ on every load, so they report changes that never affected the policy and quickly train the reader to ignore them. Instead the scope is reduced to a canonical form before hashing:
+
+* Volatile fields are removed, including update and creation timestamps, report and submission counts, payout statistics, program metrics, and internal identifiers.
+* Text is whitespace-normalized, so reflowed or reindented policy text does not count as a change.
+* Empty values are dropped, so a platform field that is never filled does not move the fingerprint.
+* Collections are sorted, so a platform reordering its own assets or lists does not count as a change.
+* Informational program metadata, such as statistics, report counters, and payout averages, is excluded entirely.
+
+What does move the fingerprint is what matters for authorization to test: an added, removed, or re-scoped asset, a changed asset type, bounty tier, bounty eligibility, maximum severity, required skills, or asset instruction, edited policy, scope, FAQ, severity-assessment or rules-of-engagement text, changed testing requirements or safe-harbor declarations, a replaced policy attachment, a paused or restricted program, and changed reward tables or tiers.
+
+Platform timestamps and the fingerprint answer different questions and are both exported: a platform can change a policy without updating a timestamp, and can update a timestamp without changing anything relevant.
+
+The **Snapshot section** switch in the popup controls how much of this appears in a Markdown export. Enabled, the full `## Snapshot` section is rendered. Disabled, the section is dropped and only the `Retrieved:` line in the document header remains, so an export still states when it was taken and from which URL. The switch does not apply to JSON, where `capture` is the machine-readable provenance record and is always included.
 
 ## Supported Platforms
 
@@ -68,7 +104,7 @@ Create `platforms/<platform>.js` and export an adapter with this interface:
 }
 ```
 
-The adapter owns all platform-specific URLs, page-state handling, selectors, API or GraphQL requests, payloads, and response parsing. It must return the normalized structure used by the existing adapters. Optional platform fields can be added to scope and reward entries when they remain platform-neutral and the generic exporters can represent them.
+The adapter owns all platform-specific URLs, page-state handling, selectors, API or GraphQL requests, payloads, and response parsing. It must return the normalized structure used by the existing adapters, including a `capture` object holding the `source` it used (`method`, `description`, optional `endpoint`, and `complete: false` for a partial export) and the `platformUpdatedAt` timestamps the platform publishes. The popup completes that object with the retrieval time, the retrieval URL, and the content fingerprint; adapters never compute it themselves. Optional platform fields can be added to scope and reward entries when they remain platform-neutral and the generic exporters can represent them.
 
 Import the adapter and add it to the `adapters` array in `platforms/registry.js`. The generic popup and exporters should not need to change.
 
@@ -81,6 +117,8 @@ When structured page data is unavailable, the HackerOne adapter contacts only Ha
 The Intigriti adapter contacts only Intigriti's first-party program endpoints. Public routes use `/api/core/public/programs/<company>/<program>` and explicitly omit browser credentials. Authenticated researcher routes use `/api/core/researcher/programs/<company>/<program>` with `credentials: "include"` so the browser can apply the user's existing Intigriti session. The adapter never reads, returns, persists, logs, copies, or saves cookies, CSRF values, authorization headers, or other authentication material.
 
 The work-in-progress YesWeHack adapter supports public programs only. It first reads only the matching public program object already held by the loaded page. It never reads browser storage, a Bearer token, or the Authorization header. If no matching page state is available, it contacts only YesWeHack's first-party `https://api.yeswehack.com/programs/<program>` public endpoint. That fallback uses the API's public CORS access and explicitly omits browser credentials.
+
+Snapshot provenance is derived from data the extension already holds. The retrieval URL recorded in an export is the program page URL of the active tab, reduced to origin and path: user name, password, query string, and fragment are removed before it is stored, because none of them identify a program and all of them can carry session material on a page the extension does not control. Platform update timestamps that do not parse as dates are dropped rather than exported under a label that implies they are dates. Retrieval endpoints recorded in an export are the fixed first-party program endpoints listed above. The content fingerprint is computed locally in the popup with the browser's Web Crypto API and is never sent anywhere.
 
 Extracted scope remains in the popup's memory until it closes. Data leaves the popup only when the user explicitly copies it or saves it to a local file.
 
@@ -103,6 +141,14 @@ Platform adapters must request only the fields and first-party origins needed fo
 
 Bug fixes and focused platform adapters are welcome. Please keep the extension dependency-free and preserve the generic normalized schema, minimal permissions, and strict separation between platform adapters and shared UI/export code.
 
+## Tests
+
+The test suite is dependency-free. Run it with:
+
+```sh
+for test in tests/*.test.mjs; do node "$test"; done
+```
+
 ## Disclaimer
 
-Use this extension only with bug bounty programs and systems you are authorized to access. The exported scope is a convenience copy; always verify the live program page before testing because program scope can change.
+Use this extension only with bug bounty programs and systems you are authorized to access. The exported scope is a convenience copy; always verify the live program page before testing because program scope can change. The snapshot provenance and fingerprint in an export make such a change detectable after the fact; they do not make a stale snapshot safe to rely on.
