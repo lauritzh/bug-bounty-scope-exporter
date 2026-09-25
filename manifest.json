@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Bug Bounty Scope Exporter",
+  "version": "1.0.0",
+  "description": "Copy or save bug bounty program policies, metadata, and scope as Markdown or JSON.",
+  "permissions": [
+    "clipboardWrite",
+    "downloads",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://hackerone.com/*",
+    "https://www.hackerone.com/*",
+    "https://app.intigriti.com/*",
+    "https://yeswehack.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Bug Bounty Scope Exporter",
+    "default_popup": "popup.html"
+  }
+}
